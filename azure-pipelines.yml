@@ -96,7 +96,16 @@ jobs:
     displayName: Enable Vcpkg Install
     inputs:
       script: |
+        if not exist "$(VCPKG_INSTALLATION_ROOT)\vcpkg.exe" (
+          echo ERROR: vcpkg.exe not found at $(VCPKG_INSTALLATION_ROOT)
+          exit /b 1
+        )
         $(VCPKG_INSTALLATION_ROOT)\vcpkg.exe integrate install
+        if errorlevel 1 (
+          echo ERROR: vcpkg integrate install failed
+          exit /b 1
+        )
+        echo vcpkg integration successful
       workingDirectory: '$(VCPKG_INSTALLATION_ROOT)'
 
   - task: PowerShell@2
@@ -331,10 +340,20 @@ jobs:
       packageFeedSelector: 'nugetOrg'
 
   - powershell: |
-      Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
-      Install-Module Microsoft.WinGet.Client -Repository PSGallery -Force
-      try { Repair-WingetPackageManager -AllUsers -Latest -Verbose } catch { $_.Exception }
-      Install-WinGetPackage -Id Microsoft.Sysinternals.PsTools -Source winget
+      try {
+        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -ErrorAction Stop
+        Install-Module Microsoft.WinGet.Client -Repository PSGallery -Force -ErrorAction Stop
+        try { 
+          Repair-WingetPackageManager -AllUsers -Latest -Verbose 
+        } catch { 
+          Write-Warning "Repair-WingetPackageManager failed: $($_.Exception.Message)"
+        }
+        Install-WinGetPackage -Id Microsoft.Sysinternals.PsTools -Source winget -ErrorAction Stop
+        Write-Host "Sysinternals PsTools installed successfully"
+      } catch {
+        Write-Error "Failed to install Sysinternals PsTools: $_"
+        throw
+      }
     displayName: Install Sysinternals PsTools Using Winget
     condition: succeededOrFailed()
 
@@ -346,7 +365,12 @@ jobs:
     condition: succeededOrFailed()
 
   - powershell: |
-      Uninstall-WinGetPackage -Id Microsoft.Sysinternals.PsTools -Source winget
+      try {
+        Uninstall-WinGetPackage -Id Microsoft.Sysinternals.PsTools -Source winget -ErrorAction Stop
+        Write-Host "Sysinternals PsTools uninstalled successfully"
+      } catch {
+        Write-Host "Failed to uninstall Sysinternals PsTools or it was not installed: $_"
+      }
     displayName: Clean up Sysinternals PsTools
     condition: succeededOrFailed()
 
@@ -479,7 +503,14 @@ jobs:
       arguments: '-TargetLocation $(artifactsDir)\ConfigOOPTestsLog'
     condition: succeededOrFailed()
 
-  - powershell: Get-Process LocalhostWebServer | Stop-Process
+  - powershell: |
+      $process = Get-Process -Name LocalhostWebServer -ErrorAction SilentlyContinue
+      if ($process) {
+        Stop-Process -InputObject $process -Force
+        Write-Host "LocalhostWebServer stopped successfully"
+      } else {
+        Write-Host "LocalhostWebServer process not found"
+      }
     displayName: Stop LocalhostWebServer
     condition: succeededOrFailed()
     
@@ -584,7 +615,14 @@ jobs:
     displayName: Run Windows PowerShell Tests
     condition: succeededOrFailed()
 
-  - powershell: Get-Process LocalhostWebServer | Stop-Process
+  - powershell: |
+      $process = Get-Process -Name LocalhostWebServer -ErrorAction SilentlyContinue
+      if ($process) {
+        Stop-Process -InputObject $process -Force
+        Write-Host "LocalhostWebServer stopped successfully"
+      } else {
+        Write-Host "LocalhostWebServer process not found"
+      }
     displayName: Stop LocalhostWebServer
     condition: succeededOrFailed()
 
@@ -648,7 +686,16 @@ jobs:
     displayName: Enable Vcpkg Install
     inputs:
       script: |
+        if not exist "$(VCPKG_INSTALLATION_ROOT)\vcpkg.exe" (
+          echo ERROR: vcpkg.exe not found at $(VCPKG_INSTALLATION_ROOT)
+          exit /b 1
+        )
         $(VCPKG_INSTALLATION_ROOT)\vcpkg.exe integrate install
+        if errorlevel 1 (
+          echo ERROR: vcpkg integrate install failed
+          exit /b 1
+        )
+        echo vcpkg integration successful
       workingDirectory: '$(VCPKG_INSTALLATION_ROOT)'
 
   - task: VSBuild@1

@@ -10,39 +10,61 @@ parameters:
 
 steps:
   - pwsh: |
-      $newCertArguments = @{
-        Type = "Custom"
-        Subject = "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
-        KeyUsage = "DigitalSignature"
-        TextExtension = @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
-        CertStoreLocation = "Cert:\CurrentUser\My"
+      try {
+        $newCertArguments = @{
+          Type = "Custom"
+          Subject = "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+          KeyUsage = "DigitalSignature"
+          TextExtension = @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+          CertStoreLocation = "Cert:\CurrentUser\My"
+        }
+        $cert = New-SelfSignedCertificate @newCertArguments
+
+        $certPfxPath = Join-Path $(Agent.TempDirectory) TestSigningCert.pfx
+        $certCerPath = Join-Path ${{ parameters.signingCertOutDir }} TestSigningCert.cer
+        $certPassword = (New-Guid).ToString()
+        $certSecurePassword = ConvertTo-SecureString $certPassword -AsPlainText -Force
+
+        Export-PfxCertificate -Cert $cert -FilePath $certPfxPath -Password $certSecurePassword
+        Export-Certificate -Cert $cert -FilePath $certCerPath
+
+        if (-not (Test-Path $certPfxPath)) {
+          throw "Failed to create PFX certificate at $certPfxPath"
+        }
+        if (-not (Test-Path $certCerPath)) {
+          throw "Failed to create CER certificate at $certCerPath"
+        }
+
+        Write-Host "##vso[task.setvariable variable=TestSigningCert.PfxPath;]$certPfxPath"
+        Write-Host "##vso[task.setvariable variable=TestSigningCert.CerPath;]$certCerPath"
+        Write-Host "##vso[task.setvariable variable=TestSigningCert.Password;]$certPassword"
+        Write-Host "Test codesigning certificate created successfully"
+      } catch {
+        Write-Error "Failed to create test codesigning certificate: $_"
+        throw
       }
-      $cert = New-SelfSignedCertificate @newCertArguments
-
-      $certPfxPath = Join-Path $(Agent.TempDirectory) TestSigningCert.pfx
-      $certCerPath = Join-Path ${{ parameters.signingCertOutDir }} TestSigningCert.cer
-      $certPassword = (New-Guid).ToString()
-      $certSecurePassword = ConvertTo-SecureString $certPassword -AsPlainText
-
-      Export-PfxCertificate -Cert $cert -FilePath $certPfxPath -Password $certSecurePassword
-      Export-Certificate -Cert $cert -FilePath $certCerPath
-
-      Write-Host "##vso[task.setvariable variable=TestSigningCert.PfxPath;]$certPfxPath"
-      Write-Host "##vso[task.setvariable variable=TestSigningCert.CerPath;]$certCerPath"
-      Write-Host "##vso[task.setvariable variable=TestSigningCert.Password;]$certPassword"
     displayName: Create test codesigning cert
     condition: succeededOrFailed()
 
   - pwsh: |
-      $httpsCertPath = Join-Path $(Agent.TempDirectory) HttpsCert.pfx
-      $httpsCertPassword = (New-Guid).ToString()
-      dotnet dev-certs https --export-path $httpsCertPath --password $httpsCertPassword
+      try {
+        $httpsCertPath = Join-Path $(Agent.TempDirectory) HttpsCert.pfx
+        $httpsCertPassword = (New-Guid).ToString()
+        dotnet dev-certs https --export-path $httpsCertPath --password $httpsCertPassword
+        if (-not (Test-Path $httpsCertPath)) {
+          throw "Failed to create HTTPS certificate at $httpsCertPath"
+        }
 
-      $securePassword = ConvertTo-SecureString $httpsCertPassword -AsPlainText
-      Import-PfxCertificate -FilePath $httpsCertPath -Password $securePassword -CertStoreLocation Cert:\LocalMachine\Root
+        $securePassword = ConvertTo-SecureString $httpsCertPassword -AsPlainText -Force
+        Import-PfxCertificate -FilePath $httpsCertPath -Password $securePassword -CertStoreLocation Cert:\LocalMachine\Root
 
-      Write-Host "##vso[task.setvariable variable=HttpsCert.Path;]$httpsCertPath"
-      Write-Host "##vso[task.setvariable variable=HttpsCert.Password;]$httpsCertPassword"
+        Write-Host "##vso[task.setvariable variable=HttpsCert.Path;]$httpsCertPath"
+        Write-Host "##vso[task.setvariable variable=HttpsCert.Password;]$httpsCertPassword"
+        Write-Host "HTTPS certificate created and installed successfully"
+      } catch {
+        Write-Error "Failed to create or install HTTPS certificate: $_"
+        throw
+      }
     displayName: Create and install localhost HTTPS cert
     condition: succeededOrFailed()
 
