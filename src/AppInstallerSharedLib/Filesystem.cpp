@@ -514,11 +514,17 @@ namespace AppInstaller::Filesystem
     {
         std::vector<FileInfo> result;
 
-        for (const auto& file : std::filesystem::directory_iterator{ directory })
+        std::error_code ec;
+        for (const auto& file : std::filesystem::directory_iterator{ directory, ec })
         {
-            if (file.is_regular_file())
+            if (ec)
             {
-                result.emplace_back(FileInfo{ file.path(), file.last_write_time(), file.file_size() });
+                break;
+            }
+
+            if (file.is_regular_file(ec))
+            {
+                result.emplace_back(FileInfo{ file.path(), file.last_write_time(ec), file.file_size(ec) });
             }
         }
 

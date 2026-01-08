@@ -51,7 +51,8 @@ namespace AppInstaller::Logging
     {
         m_name = "file";
         m_filePath = Runtime::GetPathTo(Runtime::PathName::DefaultLogLocation);
-        m_filePath /= fileNamePrefix.data() + ('-' + Utility::GetCurrentTimeForFilename() + s_fileLoggerDefaultFileExt.data());
+        std::string fileName = std::string(fileNamePrefix) + '-' + Utility::GetCurrentTimeForFilename() + std::string(s_fileLoggerDefaultFileExt);
+        m_filePath /= fileName;
         InitializeDefaultMaximumFileSize();
         OpenFileLoggerStream();
     }
@@ -101,8 +102,8 @@ namespace AppInstaller::Logging
 
     void FileLogger::WriteDirect(Channel, Level, std::string_view message) noexcept try
     {
-        HandleMaximumFileSize(message);
-        m_stream << message << std::endl;
+        std::string_view messageToWrite = HandleMaximumFileSize(message);
+        m_stream << messageToWrite << std::endl;
     }
     catch (...) {}
 
@@ -192,11 +193,11 @@ namespace AppInstaller::Logging
         m_maximumSize = static_cast<std::ofstream::off_type>(Settings::User().Get<Settings::Setting::LoggingFileIndividualSizeLimitInMB>()) << 20;
     }
 
-    void FileLogger::HandleMaximumFileSize(std::string_view& currentLog)
+    std::string_view FileLogger::HandleMaximumFileSize(std::string_view currentLog)
     {
         if (m_maximumSize == 0)
         {
-            return;
+            return currentLog;
         }
 
         auto maximumLogSize = static_cast<size_t>(CalculateDiff(m_headersEnd, m_maximumSize));
@@ -204,16 +205,15 @@ namespace AppInstaller::Logging
         // In the event that a single log is larger than the maximum
         if (currentLog.size() > maximumLogSize)
         {
-            currentLog = currentLog.substr(0, maximumLogSize);
             WrapLogFile();
-            return;
+            return currentLog.substr(0, maximumLogSize);
         }
 
         auto currentPosition = m_stream.tellp();
         if (currentPosition == std::ofstream::pos_type{ -1 })
         {
             // The expectation is that if the stream is in an error state the write won't actually happen.
-            return;
+            return currentLog;
         }
 
         auto availableSpace = static_cast<size_t>(CalculateDiff(currentPosition, m_maximumSize));
@@ -221,8 +221,9 @@ namespace AppInstaller::Logging
         if (currentLog.size() > availableSpace)
         {
             WrapLogFile();
-            return;
         }
+
+        return currentLog;
     }
 
     void FileLogger::WrapLogFile()
