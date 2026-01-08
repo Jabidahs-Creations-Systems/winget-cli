@@ -54,7 +54,7 @@ if (-not [System.String]::IsNullOrEmpty($sourceCert))
         Write-Error "Source certificate not found at: $sourceCert"
         throw "Certificate file not found"
     }
-    $result = & certutil.exe -addstore -f "TRUSTEDPEOPLE" $sourceCert
+    & certutil.exe -addstore -f "TRUSTEDPEOPLE" $sourceCert | Out-Host
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to add certificate to TRUSTEDPEOPLE store"
         throw "Certificate installation failed with exit code: $LASTEXITCODE"
