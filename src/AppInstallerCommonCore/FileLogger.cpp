@@ -51,7 +51,8 @@ namespace AppInstaller::Logging
     {
         m_name = "file";
         m_filePath = Runtime::GetPathTo(Runtime::PathName::DefaultLogLocation);
-        m_filePath /= fileNamePrefix.data() + ('-' + Utility::GetCurrentTimeForFilename() + s_fileLoggerDefaultFileExt.data());
+        std::string fileName = std::string(fileNamePrefix) + '-' + Utility::GetCurrentTimeForFilename() + std::string(s_fileLoggerDefaultFileExt);
+        m_filePath /= fileName;
         InitializeDefaultMaximumFileSize();
         OpenFileLoggerStream();
     }
