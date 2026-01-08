@@ -66,7 +66,8 @@ namespace AppInstaller::Logging
 
         // Determines if the logger needs to wrap back to the beginning, doing so when needed.
         // May also shrink the given view if it exceeds the overall maximum.
-        void HandleMaximumFileSize(std::string_view& currentLog);
+        // Returns the (possibly truncated) message to write.
+        std::string_view HandleMaximumFileSize(std::string_view currentLog);
 
         // Resets the log file state so that it will overwrite the data portion.
         void WrapLogFile();
