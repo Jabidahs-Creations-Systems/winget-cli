@@ -49,13 +49,29 @@ param(
 if (-not [System.String]::IsNullOrEmpty($sourceCert))
 {
     # Requires admin
-    & certutil.exe -addstore -f "TRUSTEDPEOPLE" $sourceCert
+    Write-Host "Adding certificate to TRUSTEDPEOPLE store: $sourceCert"
+    if (-not (Test-Path $sourceCert)) {
+        Write-Error "Source certificate not found at: $sourceCert"
+        throw "Certificate file not found"
+    }
+    & certutil.exe -addstore -f "TRUSTEDPEOPLE" $sourceCert | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to add certificate to TRUSTEDPEOPLE store"
+        throw "Certificate installation failed with exit code: $LASTEXITCODE"
+    }
+    Write-Host "Certificate added successfully"
+}
+
+$exePath = Join-Path $BuildRoot "LocalhostWebServer.exe"
+if (-not (Test-Path $exePath)) {
+    Write-Error "LocalhostWebServer.exe not found at: $exePath"
+    throw "LocalhostWebServer.exe not found"
 }
 
 Push-Location $BuildRoot
 
 $startProcessArguments = @{
-    FilePath = Join-Path $BuildRoot "LocalhostWebServer.exe"
+    FilePath = $exePath
     ArgumentList = "StaticFileRoot=$StaticFileRoot CertPath=$CertPath CertPassword=$CertPassword OutCertFile=$OutCertFile LocalSourceJson=$LocalSourceJson TestDataPath=$TestDataPath ExitBeforeRun=$ExitBeforeRun"
     PassThru = $true
 }
@@ -66,11 +82,23 @@ if (-not [System.string]::IsNullOrEmpty($env:artifactsDir))
     $startProcessArguments.RedirectStandardError = Join-Path $env:artifactsDir "LocalhostWebServer.err"
 }
 
-$Local:process = Start-Process @startProcessArguments
-
-if ($ExitBeforeRun)
-{
-    Wait-Process -InputObject $Local:process
+try {
+    Write-Host "Starting LocalhostWebServer..."
+    $Local:process = Start-Process @startProcessArguments
+    Write-Host "LocalhostWebServer started with PID: $($Local:process.Id)"
+    
+    if ($ExitBeforeRun)
+    {
+        Wait-Process -InputObject $Local:process
+        if ($Local:process.ExitCode -ne 0) {
+            Write-Error "LocalhostWebServer exited with code: $($Local:process.ExitCode)"
+            throw "LocalhostWebServer failed"
+        }
+        Write-Host "LocalhostWebServer completed successfully"
+    }
+} catch {
+    Write-Error "Failed to start LocalhostWebServer: $_"
+    throw
+} finally {
+    Pop-Location
 }
-
-Pop-Location
